@@ -41,7 +41,7 @@ function Constructor(group, name, validators) {
 }
 
 function rawCase(type, cases, action, arg) {
-  if (type !== action.of) throw new TypeError('wrong type', type, ' passed to case', cases);
+  if (type !== action.of) throw new TypeError('wrong type' + JSON.stringify(type) + ' passed to case' + JSON.stringify(cases));
   var name = action.name in cases ? action.name
            : '_' in cases         ? '_'
                                   : undefined;

@@ -6,7 +6,7 @@ import R from 'ramda'
 // parameters
 
 const board_size = { width: 16, height: 16 }
-const total_mines = 40
+const total_mines = 20
 
 // model types
 
@@ -15,6 +15,7 @@ const CellStatusT = T({ Closed: [], Open: [] })
 const CellContentT = T({
   Neighbors: [Number],
   Mine: [],
+  Invalid: [],
   Unknown: []
 })
 
@@ -23,87 +24,127 @@ const GameStatusT = T({ Playing: [], Lost: [], StartingGame: [] })
 // cell is of type { status: CellStatusT, content: CellContentT }
 
 const init_cell_state = { status: CellStatusT.Closed(), content: CellContentT.Unknown() }
+const invalid_cell_state = { status: CellStatusT.Closed(), content: CellContentT.Invalid() }
+const cell_with_a_mine = { status: CellStatusT.Closed(), content: CellContentT.Mine() }
 
-const cell_is_a_mine = { status: CellStatusT.Closed(), content: CellContentT.Mine() }
+const has_a_mine = (cell) => CellContentT.case({
+  Mine: () => true,
+  _: () => false
+}, cell.content)
+
+const is_open = (cell) => CellStatusT.case({
+  Open: () => true,
+  _: () => false
+}, cell.status)
+
+const is_invalid = (cell) => CellContentT.case({
+  Invalid: () => true,
+  _: () => false
+}, cell.content)
 
 // input stream
 
-const UserClickT = T({ UserClick: [Number, Number], RestartGame: [], GameLost: [] })
+const UserClickT = T({ UserClick: [Number, Number], RestartGame: [] })
 
 const input_stream = F.stream(UserClickT.RestartGame()) // values of type UserClickT
 
-const button_click = F.stream()
+//F.on(x => console.log(x), input_stream)
 
-// model streams
+const restart_button_click = () => input_stream(UserClickT.RestartGame())
 
-// returns Array of Array of CellStateT
+const click_on_cell = (x, y) => () => input_stream(UserClickT.UserClick(x, y))
+
+// model stream
+
+// returns Array of Array of { status: CellStatusT, content: CellContentT }
 const initialize_board = (size, mines, cell_state) =>
   R.repeat(R.repeat(cell_state, size.width), size.height)
 
 const init_board_model = initialize_board(board_size, total_mines, init_cell_state)
-const init_game_status = GameStatusT.StartingGame()
 
-function update_board(board, click) {
-  // TODO
-  return board
+const init_game_model = { board: init_board_model, status: GameStatusT.StartingGame() }
+
+const have_mine = (board, x, y) => has_a_mine(R.view(cell_lens(x,y), board))
+
+const reveal_all = (board) => board.map(row => row.map(cell => R.set(R.lensProp('status'), CellStatusT.Open(), cell)))
+
+const p = (x,y) => ({ x, y })
+
+const neighbors_of = (x, y) => [ p(x-1,y-1), p(x,y-1), p(x+1,y-1), p(x-1,y), p(x+1,y), p(x-1,y+1), p(x,y+1), p(x+1,y+1) ]
+
+const cell_lens = (x,y) => (x >= 0 && x < board_size.width && y >= 0 && y < board_size.height)
+  ? R.lens(board => board[y][x], (cell, board) => R.update(y, R.update(x, cell, board[y]), board))
+  : R.lens(board => invalid_cell_state, (cell, board) => board)
+
+const count_neighbor_mines = (board, x, y) => R.sum(neighbors_of(x,y).map( ({x,y}) => have_mine(board, x,y) ? 1 : 0))
+
+const reveal_cell = (board, x, y) => {
+  const reveal_rec = (brd, remaining) => {
+    if (remaining.length == 0) return brd
+    const {x, y} = R.head(remaining)
+    const lens = cell_lens(x,y)
+    const rest = R.tail(remaining)
+    const cell = R.view(lens, brd)
+    if (is_invalid(cell) || is_open(cell) || has_a_mine(cell)) return reveal_rec(brd, rest)
+    const neighbors = count_neighbor_mines(brd, x, y)
+    const new_cell = { content: CellContentT.Neighbors(neighbors), status: CellStatusT.Open() }
+    const new_board = R.set(lens, new_cell, brd)
+    if (neighbors == 0) return reveal_rec(new_board, R.concat(neighbors_of(x,y), rest))
+    else return reveal_rec(new_board, rest)
+  }
+  return reveal_rec(board, [ {x, y} ])
 }
 
-function update_status(status, click) {
-  // TODO
-  return status
+const is_first_click = (model) => GameStatusT.case({
+  StartingGame: () => true,
+  _: () => false
+}, model.status)
+
+const make_new_model = (old_model, click) => UserClickT.case({
+    UserClick: (x,y) => {
+      const prepared_board = is_first_click(old_model) ? fill_random_board(board_size, total_mines) : old_model.board
+      if (have_mine(prepared_board, x, y))
+        return { board: reveal_all(prepared_board), status: GameStatusT.Lost() }
+      else
+        return { board: reveal_cell(prepared_board, x, y), status: GameStatusT.Playing() }
+      },
+        RestartGame: () => init_game_model
+  }, click)
+
+const fill_random_board = (size, mines) => {
+  // some big primes to use as shift and factor: 2922509, 3276509, 94418953, 321534781, 433494437, 780291637
+  const factor = 94418953
+  const shift = Math.round(Math.random()*factor)
+  const mines_indices = R.range(0, mines)
+    .map(x => (x * factor + shift) % (size.width * size.height))
+    .map(x => ({ x: x%size.width, y: (x-x%size.width)/size.height }))
+  // x,y are guaranteed to be unique indices now, because math
+  const filled_board = R.reduce(
+    (board, {x,y}) => R.set(cell_lens(x,y), cell_with_a_mine, board),
+    init_board_model,
+    mines_indices
+  )
+  return filled_board
 }
 
-function fill_random_board(size, mines) {
-  const area = size.width * size.height
-  // some big primes: 2922509, 3276509, 94418953, 321534781, 433494437, 780291637
-  const shift = 2922509
-  const modulus = 94418953
-  const mines_indices = R.range(0, mines).map(x => (x*modulus + shift) % area).map(x => ({ x: x%size.width, y: (x-x%size.width)/size.height }))
-  console.log('computed indices of mines', mines_indices)
-  const filled_board = R.reduce( (board, {x,y} ) => {
-    // x,y are guaranteed to be unique indices
-    console.log('setting mine at', x,y)
-    return R.update(y, R.update(x, cell_is_a_mine, board[y]), board)
-  }, init_board_model, mines_indices)
+// game_model is a stream
+const game_model = F.scan(make_new_model, init_game_model, input_stream)
 
-}
-
-//
-//fillRandomBoard : Int -> Int -> Int -> GameBoard -> Seed -> (GameBoard, Seed)
-//fillRandomBoard x y n board seed =
-//if n == 0 then (fillNeighbors board, seed)
-//else
-//let
-//    (mineX, seed1) = generate (int 0 (getBoardWidth board - 1)) seed
-//(mineY, seed2) = generate (int 0 (getBoardHeight board - 1)) seed1
-//(cellStatus, cellContents) = getCell mineX mineY board
-//in
-//if mineX == x || mineY == y
-//  then
-//fillRandomBoard x y n board seed2
-//else
-//case cellContents of
-//    Mine -> fillRandomBoard x y n board seed2
-//    _ -> fillRandomBoard x y (n-1) (modifyCell mineX mineY (cellStatus, Mine) board) seed2
-
-
-const board_model = F.scan(update_board, init_board_model,input_stream) // values of type Array of Array of CellStateT
-const game_status = F.scan(update_status, init_game_status, input_stream) // values of type GameStatusT
+//F.on(m => console.log(m), game_model)
 
 export default class App extends React.Component {
 
   constructor(props) {
     super(props)
-    this.state = { board: init_board_model, status: init_game_status }
+    this.state = init_game_model
   }
 
   componentDidMount() { // boilerplate
-    board_model.map(b => this.setState({ board: b }))
-    game_status.map(s => this.setState({ status: s }))
+    F.on(s => this.setState(s), game_model)
   }
 
-  _render_cell(status) {
-    return cell => {
+  _render_cell(status, row_index_x) {
+    return (cell, column_index_x) => {
       const new_cell_status = GameStatusT.case({
         Playing: () => cell.status,
         Lost: () => CellStatusT.Open(),
@@ -111,19 +152,18 @@ export default class App extends React.Component {
       }, status)
       const cell_contents = CellStatusT.case({
         Open: () => CellContentT.case({
-          Unknown: () => '',
           Mine: () => '!',
-          Neighbors: n => n
+          Neighbors: n => n,
+          _: () => '',
         }, cell.content),
         Closed: () => '',
       }, new_cell_status)
-      return <td>{cell_contents}</td>
+      return <td onClick={click_on_cell(column_index_x, row_index_x)}>{cell_contents}</td>
     }
-
   }
 
   _render_row(status) {
-    return row => <tr>{row.map(this._render_cell(status))}</tr>
+    return (row, row_index_y) => <tr>{row.map(this._render_cell(status, row_index_y))}</tr>
   }
 
   render() {
@@ -134,7 +174,7 @@ export default class App extends React.Component {
     }, this.state.status)
 
     return <div>
-      <button onClick={button_click}>{button_message}</button>
+      <button onClick={restart_button_click}>{button_message}</button>
       <table>
         { this.state.board.map(this._render_row(this.state.status)) }
       </table>
@@ -142,147 +182,3 @@ export default class App extends React.Component {
   }
 
 }
-
-/*
-
-
- clickSignal : Signal UserClick
- clickSignal = Signal.subscribe clickChannel
-
- type CellStatus = Closed | Open
- type CellContents = Neighbors Int | Mine
- type alias CellState = (CellStatus, CellContents)
- type alias GameBoard = Array (Array CellState)
- type GameStatus = Playing | Lost | StartingGame
- type alias GameState = (GameStatus, GameBoard, Seed)
-
- dummyState = (Closed, Neighbors (-1))
-
- getBoardWidth board = Array.length board
-
- getBoardHeight board = withDefault 0 <| Maybe.map Array.length (Array.get 0 board)
-
- initializeState : Int -> Int -> Seed -> GameState
- initializeState w h seed = (StartingGame, Array.repeat w (Array.repeat h dummyState), seed)
-
- main : Signal Element
- main = clickSignal
- |> Signal.foldp updateState (initializeState board_width board_height (initialSeed 12345))
- |> Signal.map drawScene
-
- drawScene : GameState -> Element
- drawScene (status, board, _) = flow down [spacer 10 10, flow right [spacer 10 10, drawBoard board, spacer 30 30,
- case status of
- Lost ->
- clickable (Signal.send clickChannel (RestartGame board_width board_height))
- <| color grey
- <| centered <| fromString "You lost, click this to clear game"
- StartingGame -> centered <| fromString "Click to begin"
- Playing ->
- clickable (Signal.send clickChannel (RestartGame board_width board_height))
- <| color grey
- <| centered <| fromString "Restart game"
- ]
- ]
-
- totalBoardWidth board = (cellSize+2)*(getBoardWidth board)
- totalBoardHeight board = (cellSize+2)*(getBoardHeight board)
-
- drawBoard : GameBoard -> Element
-
- drawBoard board = color black <| container (totalBoardWidth board + 2) (totalBoardHeight board + 2) middle <| flow right <| List.map drawColumn <| toIndexedList board
-
- drawColumn : (Int, Array CellState) -> Element
- drawColumn (x, column) = flow down <| List.map (drawCell' x) <| toIndexedList column
-
- drawCell' x (y, c) = color black
- <| container (cellSize+2) (cellSize+2) middle
- <| clickable (Signal.send clickChannel (UserClick x y))
- <| drawCell c
-
- drawCell : CellState -> Element
- drawCell (status, contents) =
- let
- cellElement = case contents of
- Mine -> color red <| container cellSize cellSize middle <| centered <| fromString "!"
- Neighbors 0 -> color white <| spacer (cellSize+2) (cellSize+2)
- Neighbors n -> color white <| container cellSize cellSize middle <| asText n
- in
- case status of
- Open -> cellElement
- _ -> color grey <| spacer cellSize cellSize
-
- getCell : Int -> Int -> GameBoard -> CellState
- getCell x y board = withDefault dummyState <| Array.get x board `andThen` (\column -> Array.get y column)
-
- numberOfMines : Int -> Int -> GameBoard -> Int
- numberOfMines x y board = case getCell x y board of
- (_, Mine) -> 1
- _ -> 0
-
- updateState : UserClick -> GameState -> GameState
- updateState click oldState = case (click, oldState) of
- (RestartGame w h, (status, board, seed)) -> initializeState w h seed
- (UserClick x y, (status, board, seed)) ->
- case status of
- StartingGame ->
- let
- (newRandomBoard, newSeed) = fillRandomBoard x y mines board seed
- in
- (Playing, revealNeighbors [(x,y)] newRandomBoard, newSeed)
- Playing ->
- case getCell x y board of
- (Open, _) -> (Playing, board, seed)
- (Closed, Mine) -> (Lost, revealAll board, seed)
- (Closed, Neighbors _) -> (Playing, revealNeighbors [(x,y)] board, seed)
- _ -> (status, board, seed)
-
- revealNeighbors list board =
- case list of
- [] -> board
- (x,y)::rest -> case (getCell x y board) of
- (Open, _) -> revealNeighbors rest board
- (Closed, Mine) -> revealNeighbors rest board
- (Closed, Neighbors 0) -> let newList = List.append (neighbors x y) rest in revealNeighbors newList <| modifyCell x y (Open, Neighbors 0) board
- (Closed, Neighbors n) -> revealNeighbors rest <| modifyCell x y (Open, Neighbors n) board
-
- neighbors x y = [ (x-1,y-1), (x,y-1), (x+1,y-1), (x-1,y), (x+1,y),
- (x-1,y+1), (x,y+1), (x+1,y+1) ]
-
- fillNeighbors board =
- let
- computeNeighbors x y (status, contents) =
- let
- nMines (x, y) = numberOfMines x y board
- sumNeighbors = List.foldl1 (+) <| List.map nMines  <| neighbors x y
- in
- case contents of
- Mine -> (status, Mine)
- _ ->  (status, Neighbors sumNeighbors)
- fillNeighborsInColumn x column = indexedMap (computeNeighbors x) column
- in
- indexedMap fillNeighborsInColumn board
-
- fillRandomBoard : Int -> Int -> Int -> GameBoard -> Seed -> (GameBoard, Seed)
- fillRandomBoard x y n board seed =
- if n == 0 then (fillNeighbors board, seed)
- else
- let
- (mineX, seed1) = generate (int 0 (getBoardWidth board - 1)) seed
- (mineY, seed2) = generate (int 0 (getBoardHeight board - 1)) seed1
- (cellStatus, cellContents) = getCell mineX mineY board
- in
- if mineX == x || mineY == y
- then
- fillRandomBoard x y n board seed2
- else
- case cellContents of
- Mine -> fillRandomBoard x y n board seed2
- _ -> fillRandomBoard x y (n-1) (modifyCell mineX mineY (cellStatus, Mine) board) seed2
-
- modifyCell : Int -> Int -> CellState -> GameBoard -> GameBoard
- modifyCell x y cellState board = withDefault board <| Array.get x board `andThen` (\column -> Just <| Array.set x (Array.set y cellState column) board)
-
- revealAll = Array.map (Array.map revealCell)
- revealCell (status, contents) = (Open, contents)
- */

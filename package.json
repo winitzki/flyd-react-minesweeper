@@ -20,8 +20,8 @@
     "babel-eslint": "^4.0.5",
     "babel-loader": "^5.3.2",
     "css-loader": "^0.15.6",
-    "eslint": "^1.0.0",
-    "eslint-loader": "^0.14.2",
+    "eslint": "^1.8.0",
+    "eslint-loader": "^1.1.1",
     "eslint-plugin-react": "^3.1.0",
     "html-webpack-plugin": "^1.6.0",
     "node-libs-browser": "^0.5.2",
@@ -77,6 +77,7 @@
   },
   "dependencies": {
     "flyd": "^0.1.15",
+    "ramda": "^0.18.0",
     "react": "^0.13.3",
     "union-type": "^0.1.6"
   }

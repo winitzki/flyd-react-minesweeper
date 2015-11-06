@@ -10,5 +10,6 @@ table {
 td {
   width: 20px;
   height: 20px;
-  background-color: grey;
+  background-color: lightblue;
+  text-align: center;
 }
