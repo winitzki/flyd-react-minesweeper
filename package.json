@@ -1,0 +1,83 @@
+{
+  "name": "flyd-react-es6",
+  "version": "0.0.1",
+  "description": "First test of webpack with react",
+  "main": "main.js",
+  "scripts": {
+    "lint": "eslint . --ext .js --ext .jsx",
+    "start": "TARGET=dev webpack-dev-server --progress --colors --hot --inline --history-api-fallback",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack -p"
+  },
+  "repository": {
+    "type": "git",
+    "url": "ssh://github.com/winitzki/flyd-react-es6"
+  },
+  "author": "Sergei Winitzki",
+  "license": "ISC",
+  "devDependencies": {
+    "babel-core": "^5.8.20",
+    "babel-eslint": "^4.0.5",
+    "babel-loader": "^5.3.2",
+    "css-loader": "^0.15.6",
+    "eslint": "^1.0.0",
+    "eslint-loader": "^0.14.2",
+    "eslint-plugin-react": "^3.1.0",
+    "html-webpack-plugin": "^1.6.0",
+    "node-libs-browser": "^0.5.2",
+    "react-hot-loader": "^1.2.8",
+    "style-loader": "^0.12.3",
+    "webpack": "^1.10.5",
+    "webpack-dev-server": "^1.10.1",
+    "webpack-merge": "^0.1.2"
+  },
+  "eslintConfig": {
+    "parser": "babel-eslint",
+    "env": {
+      "browser": true,
+      "node": true,
+      "es6": true
+    },
+    "plugins": [
+      "react"
+    ],
+    "ecmaFeatures": {
+      "modules": true,
+      "jsx": true
+    },
+    "rules": {
+      "semi": [
+        2,
+        "never"
+      ],
+      "new-cap": 0,
+      "strict": [
+        2,
+        "global"
+      ],
+      "no-underscore-dangle": 0,
+      "no-use-before-define": 0,
+      "eol-last": 0,
+      "quotes": [
+        2,
+        "single"
+      ],
+      "react/jsx-boolean-value": 1,
+      "jsx-quotes": 1,
+      "react/jsx-no-undef": 1,
+      "react/jsx-uses-react": 1,
+      "react/jsx-uses-vars": 1,
+      "react/no-did-mount-set-state": 1,
+      "react/no-did-update-set-state": 1,
+      "react/no-multi-comp": 1,
+      "react/no-unknown-property": 1,
+      "react/react-in-jsx-scope": 1,
+      "react/self-closing-comp": 1
+    }
+  },
+  "dependencies": {
+    "flyd": "^0.1.15",
+    "react": "^0.13.3",
+    "union-type": "^0.1.6"
+  }
+}

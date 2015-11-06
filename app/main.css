@@ -1,0 +1,14 @@
+body {
+  background: cornsilk;
+}
+
+table {
+  margin-top: 20px;
+  border-width: 1px;
+}
+
+td {
+  width: 20px;
+  height: 20px;
+  background-color: grey;
+}
