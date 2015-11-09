@@ -109,10 +109,11 @@ const make_new_model = (old_model, click) => UserClickT.case({
 
 const fill_random_board = (size, mines) => {
   // some big primes to use as shift and factor: 2922509, 3276509, 94418953, 321534781, 433494437, 780291637
-  const factor = 94418953
-  const shift = Math.round(Math.random()*factor)
+  const factors = [2922509, 3276509, 94418953, 321534781, 433494437, 780291637]
+  const transform = factor => x => (x * factor + Math.round(Math.random()*factor)) % (size.width * size.height)
+  const all_transforms = R.reduce((f, g) => y => g(f(y)), x=>x, factors.map(transform))
   const mines_indices = R.range(0, mines)
-    .map(x => (x * factor + shift) % (size.width * size.height))
+    .map(all_transforms)
     .map(x => ({ x: x%size.width, y: (x-x%size.width)/size.height }))
   // x,y are guaranteed to be unique indices now, because math
   const filled_board = R.reduce(
